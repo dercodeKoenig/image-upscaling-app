@@ -3,15 +3,15 @@ plugins {
 }
 
 android {
-    namespace 'net.image_upscaling_app'
+    namespace 'net.image_upscaling'
     compileSdk 36
 
     defaultConfig {
-        applicationId "net.image_upscaling_app"
+        applicationId "net.image_upscaling"
         minSdk 24
         targetSdk 36
-        versionCode 1
-        versionName "1.0"
+        versionCode 4
+        versionName "4.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }

@@ -1,5 +1,5 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="net.image_upscaling_app">
+    package="net.image_upscaling">
 
     <!-- Required permissions -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -25,7 +25,7 @@
         android:theme="@style/Theme.AppCompat.Light.NoActionBar"
         android:requestLegacyExternalStorage="true">
 
-        <activity android:name=".MainActivity"
+        <activity android:name="net.image_upscaling.MainActivity"
             android:exported="true"
             android:launchMode="singleTask">
             <intent-filter>

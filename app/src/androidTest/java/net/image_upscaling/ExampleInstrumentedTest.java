@@ -1,4 +1,4 @@
-package net.image_upscaling_app;
+package net.image_upscaling;
 
 import android.content.Context;
 
