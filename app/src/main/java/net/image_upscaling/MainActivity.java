@@ -40,6 +40,7 @@ import java.io.File;
 import java.io.IOException;
 import java.security.SecureRandom;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -89,6 +90,10 @@ public class MainActivity extends AppCompatActivity implements DefaultLifecycleO
     private int noDataCounter = 0;
     private boolean isActive = true;
     private boolean isScanning = true;
+
+    private static final int MAX_DOWNLOADED_FILES_CACHE = 50;
+    private LinkedHashSet<String> downloadedFiles = new LinkedHashSet<>();
+
 
     private String serverurl = "https://image-upscaling.net";
 
@@ -528,10 +533,19 @@ public class MainActivity extends AppCompatActivity implements DefaultLifecycleO
 
                     int waiting = waiting1.length() + waiting2.length();
 
+                    // Remove oldest entries if we exceed the limit
+                    while (downloadedFiles.size() > MAX_DOWNLOADED_FILES_CACHE) {
+                        String oldest = downloadedFiles.iterator().next();
+                        downloadedFiles.remove(oldest);
+                        //Log.d("image-upscaling", "Removed old download record: " + oldest);
+                    }
+
                     for (int i = 0; i < completed.length(); i++) {
                         String filepath = completed.getString(i);
-                        Log.e("image-upscaling",filepath);
-                        downloadFile(filepath);
+                        if (!downloadedFiles.contains(filepath)) {
+                            downloadedFiles.add(filepath);
+                            downloadFile(filepath);
+                        }
                     }
 
                     updateStatus2(waiting + " image(s) are currently processing");
@@ -590,7 +604,7 @@ public class MainActivity extends AppCompatActivity implements DefaultLifecycleO
         String[] split = filepath.split("/");
         String filename = split[split.length - 1];
         String downloadUrl = serverurl+"/download_upscaling_data/processed/"+filename+"?delete_after_download=&client_id="+clientId;
-        Log.e("image-upscaling", downloadUrl);
+        //Log.e("image-upscaling", downloadUrl);
 
         File file = new File(
                 Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
