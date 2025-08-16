@@ -14,6 +14,7 @@ import android.os.Environment;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.MediaStore;
+import android.provider.Settings;
 import android.util.Log;
 import android.view.View;
 import android.widget.ArrayAdapter;
@@ -38,6 +39,8 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.io.IOException;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
@@ -565,6 +568,24 @@ public class MainActivity extends AppCompatActivity implements DefaultLifecycleO
     }
 
     private String generateClientId() {
+        String androidId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID) + "-" + Build.FINGERPRINT;
+        Log.i("", "android id: " + androidId);
+
+        try {
+            MessageDigest digest = MessageDigest.getInstance("MD5");
+            byte[] hash = digest.digest(androidId.getBytes());
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hash) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString(); // 32 hex chars
+        } catch (NoSuchAlgorithmException e) {
+            // Fallback to random generation
+            return generateRandomClientId();
+        }
+    }
+
+    private String generateRandomClientId() {
         SecureRandom random = new SecureRandom();
         byte[] bytes = new byte[16];
         random.nextBytes(bytes);
