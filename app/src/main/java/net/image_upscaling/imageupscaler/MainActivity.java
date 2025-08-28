@@ -29,6 +29,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.Objects;
 
 import okhttp3.Call;
 import okhttp3.Callback;
@@ -44,8 +45,8 @@ import okhttp3.Response;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "UpscalingApp";
-    static final String SERVER_URL = "https://image-upscaling.net";
-    //static final String SERVER_URL = "https://test.image-upscaling.net";
+    //static final String SERVER_URL = "https://image-upscaling.net";
+    static final String SERVER_URL = "https://test.image-upscaling.net";
 
     private static final int REQUEST_STORAGE_PERMISSION = 1001;
     private static final int PICK_IMAGE_REQUEST = 2001;
@@ -287,7 +288,8 @@ public class MainActivity extends AppCompatActivity {
                 if (isSupported) {
                     availableModels.add(modelKey);
                     String help = modelConfig.optString("help", modelKey);
-                    modelLabels.add(modelKey + " - " + help);
+                    //modelLabels.add(modelKey + " - " + help);
+                    modelLabels.add(modelKey);
                 }
             }
         } catch (Exception e) {
@@ -369,7 +371,10 @@ public class MainActivity extends AppCompatActivity {
                 int maxSizeInput = scaleConfig.getInt("max_size_input");
 
                 if (selectedImageSize == 0 || maxSizeInput >= selectedImageSize) {
-                    availableScales.add(scaleKey + "x");
+                    if (Objects.equals(scaleKey, "-1"))
+                        availableScales.add("4MP");
+                    else
+                        availableScales.add(scaleKey + "x");
                 }
             }
 
