@@ -11,6 +11,7 @@
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
         android:orientation="horizontal"
+        android:layout_marginBottom="8dp"
         android:padding="8dp">
 
         <TextView
@@ -56,6 +57,13 @@
     </LinearLayout>
 
     <!-- Scale Selection -->
+    <TextView
+        android:id="@+id/tvModelInfo"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text=""
+        android:textAlignment="center" />
+
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -78,25 +86,19 @@
     </LinearLayout>
 
     <!-- Face Enhancement Option -->
-    <CheckBox
-        android:id="@+id/checkBoxFaceEnhance"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="16dp"
-        android:text="Enable Face Enhancement"
-        android:visibility="gone" />
+
+        <CheckBox
+            android:id="@+id/checkBoxFaceEnhance"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:text="Enable Face Enhancement"
+            android:visibility="invisible" />
+
 
     <!-- Image Selection Button -->
 
     <!-- Image Preview Section -->
-    <TextView
-        android:id="@+id/tvModelInfo"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:layout_marginBottom="8dp"
-        android:text=""
-        android:textAlignment="center" />
 
     <FrameLayout
         android:layout_width="match_parent"

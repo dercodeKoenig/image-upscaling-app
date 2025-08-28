@@ -347,7 +347,7 @@ public class MainActivity extends AppCompatActivity {
 
             // Update face enhancement checkbox visibility
             boolean supportsFx = modelConfig.optBoolean("fx", false);
-            checkBoxFaceEnhance.setVisibility(supportsFx ? View.VISIBLE : View.GONE);
+            checkBoxFaceEnhance.setVisibility(supportsFx ? View.VISIBLE : View.INVISIBLE);
 
             // Populate scale spinner
             populateScaleSpinner(selectedModel, modelConfig);
