@@ -9,6 +9,8 @@ import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.view.View;
 import android.widget.ArrayAdapter;
@@ -173,6 +175,9 @@ public class MainActivity extends AppCompatActivity {
             public void onFailure(Call call, IOException e) {
                 Log.e(TAG, "Failed to load upscalers config: " + e.getMessage());
                 updateStatus("unable to load model config");
+                new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                    loadUpscalersConfig();
+                }, 5000);
             }
 
             @Override
@@ -184,7 +189,7 @@ public class MainActivity extends AppCompatActivity {
 
                     runOnUiThread(() -> {
                         populateModelSpinner();
-                        updateStatus("Configuration loaded. Select an image to continue.");
+                        updateStatus("Select an image to begin!");
                     });
                 } catch (Exception e) {
                     Log.e(TAG, "Error parsing upscalers config: " + e.getMessage());
