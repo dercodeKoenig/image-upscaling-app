@@ -413,7 +413,11 @@ public class MainActivity extends AppCompatActivity {
         ArrayList<String> availableModels = (ArrayList<String>) spinnerModel.getTag();
         String selectedModel = availableModels.get(spinnerModel.getSelectedItemPosition());
         String scaleText = spinnerScale.getSelectedItem().toString();
-        String scale = scaleText.replace("x", "");
+        String scale = "";
+        if (scaleText.equals("4MP"))
+                scale = "-1";
+        else
+            scale = scaleText.replace("x", "");
         Log.i(TAG, "submit request: "+selectedModel+":"+scale);
 
         try {
