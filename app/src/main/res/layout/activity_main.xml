@@ -2,37 +2,24 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#C2BFC7"
     android:orientation="vertical"
     android:padding="16dp">
 
+    <!-- Header Section -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
         android:orientation="horizontal"
         android:padding="8dp">
-        <LinearLayout
+
+        <TextView
+            android:id="@+id/headline"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:gravity="center_vertical"
-            android:orientation="vertical"
-            android:padding="8dp">
-            <TextView
-                android:id="@+id/headline"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="image-upscaling.net"
-                android:textSize="18sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/infoline"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="loading account info..."
-                android:textSize="16sp"/>
-        </LinearLayout>
+            android:text="image-upscaling.net"
+            android:textSize="18sp"
+            android:textStyle="bold" />
 
         <View
             android:layout_width="0dp"
@@ -46,7 +33,7 @@
             android:text="Account" />
     </LinearLayout>
 
-
+    <!-- Model Selection -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -56,6 +43,41 @@
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:gravity="center_vertical"
+            android:text="Model: "
+            android:textSize="16sp" />
+
+        <Spinner
+            android:id="@+id/spinnerModel"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1" />
+    </LinearLayout>
+
+    <!-- Model Info -->
+    <TextView
+        android:id="@+id/tvModelInfo"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:text=""
+        android:textSize="12sp"
+        android:textStyle="italic"
+        android:visibility="gone" />
+
+    <!-- Scale Selection -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:gravity="center_vertical"
             android:text="Scale Factor: "
             android:textSize="16sp" />
 
@@ -66,19 +88,18 @@
             android:layout_weight="1" />
     </LinearLayout>
 
+    <!-- Face Enhancement Option -->
     <CheckBox
         android:id="@+id/checkBoxFaceEnhance"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="16dp"
-        android:text="Enable Face Enhancement" />
+        android:text="Enable Face Enhancement"
+        android:visibility="gone" />
 
-    <Button
-        android:id="@+id/btnSelectImage"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Select Image" />
+    <!-- Image Selection Button -->
 
+    <!-- Image Preview Section -->
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
@@ -92,7 +113,8 @@
             android:layout_height="match_parent"
             android:background="#3E3E3E"
             android:contentDescription="Image Preview"
-            android:scaleType="fitCenter" />
+            android:scaleType="fitCenter"
+            android:visibility="gone" />
 
         <TextView
             android:id="@+id/tvNoImage"
@@ -105,13 +127,7 @@
             android:textStyle="italic" />
     </FrameLayout>
 
-    <Button
-        android:id="@+id/btnUpload"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:enabled="false"
-        android:text="Upload and Process" />
-
+    <!-- Upload Button -->
     <TextView
         android:id="@+id/tvStatus"
         android:layout_width="match_parent"
@@ -121,14 +137,22 @@
         android:text="Select an image to begin"
         android:textAlignment="center" />
 
-    <TextView
-        android:id="@+id/tvStatus2"
+    <Button
+        android:id="@+id/btnSelectImage"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
         android:layout_marginBottom="8dp"
-        android:text="0 images currently processing"
-        android:textAlignment="center" />
+        android:text="Select Image" />
+
+    <Button
+        android:id="@+id/btnUpload"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:enabled="false"
+        android:text="Upload and Process" />
+
+    <!-- Status Messages -->
 
     <ProgressBar
         android:id="@+id/progressBar"

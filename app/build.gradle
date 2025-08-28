@@ -3,15 +3,15 @@ plugins {
 }
 
 android {
-    namespace 'net.image_upscaling'
+    namespace 'net.image_upscaling.imageupscalerv2'
     compileSdk 36
 
     defaultConfig {
-        applicationId "net.image_upscaling"
-        minSdk 24
+        applicationId "net.image_upscaling.imageupscalerv2"
+        minSdk 26
         targetSdk 36
-        versionCode 5
-        versionName "5.0"
+        versionCode 1
+        versionName "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -26,9 +26,6 @@ android {
         sourceCompatibility JavaVersion.VERSION_11
         targetCompatibility JavaVersion.VERSION_11
     }
-    buildFeatures {
-        viewBinding true
-    }
 }
 
 dependencies {
@@ -36,10 +33,8 @@ dependencies {
 
     implementation libs.appcompat
     implementation libs.material
+    implementation libs.activity
     implementation libs.constraintlayout
-    implementation libs.navigation.fragment
-    implementation libs.navigation.ui
-    implementation libs.lifecycle.process
     testImplementation libs.junit
     androidTestImplementation libs.ext.junit
     androidTestImplementation libs.espresso.core
