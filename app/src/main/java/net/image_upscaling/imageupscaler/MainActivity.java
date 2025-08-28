@@ -189,7 +189,6 @@ public class MainActivity extends AppCompatActivity {
 
                     runOnUiThread(() -> {
                         populateModelSpinner();
-                        updateStatus("Select an image to begin!");
                     });
                 } catch (Exception e) {
                     Log.e(TAG, "Error parsing upscalers config: " + e.getMessage());
