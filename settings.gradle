@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "image upscaler v2"
+rootProject.name = "image upscaler"
 include ':app'
