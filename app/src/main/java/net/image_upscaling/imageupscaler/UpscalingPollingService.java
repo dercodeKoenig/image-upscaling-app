@@ -1,15 +1,13 @@
-package net.image_upscaling.imageupscalerv2;
+package net.image_upscaling.imageupscaler;
 
 import android.Manifest;
 import android.annotation.TargetApi;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
-import android.app.PendingIntent;
 import android.app.Service;
 import android.content.ContentResolver;
 import android.content.ContentValues;
-import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.media.MediaScannerConnection;
@@ -25,8 +23,7 @@ import android.util.Log;
 import androidx.core.app.NotificationCompat;
 import androidx.core.content.ContextCompat;
 
-import net.image_upscaling.imageupscalerv2.MainActivity;
-import net.image_upscaling.imageupscalerv2.R;
+import net.image_upscaling.imageupscaler.R;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
@@ -35,7 +32,6 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.util.List;
 
 import okhttp3.Call;
 import okhttp3.Callback;

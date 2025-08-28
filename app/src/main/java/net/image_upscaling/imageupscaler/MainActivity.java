@@ -1,4 +1,4 @@
-package net.image_upscaling.imageupscalerv2;
+package net.image_upscaling.imageupscaler;
 
 import android.Manifest;
 import android.content.ContentResolver;
@@ -25,7 +25,6 @@ import androidx.core.app.ActivityCompat;
 import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -35,7 +34,6 @@ import okhttp3.Call;
 import okhttp3.Callback;
 import okhttp3.Cookie;
 import okhttp3.CookieJar;
-import okhttp3.FormBody;
 import okhttp3.HttpUrl;
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
@@ -47,6 +45,8 @@ import okhttp3.Response;
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "UpscalingApp";
     static final String SERVER_URL = "https://image-upscaling.net";
+    //static final String SERVER_URL = "https://test.image-upscaling.net";
+
     private static final int REQUEST_STORAGE_PERMISSION = 1001;
     private static final int PICK_IMAGE_REQUEST = 2001;
 
@@ -171,17 +171,14 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onFailure(Call call, IOException e) {
                 Log.e(TAG, "Failed to load upscalers config: " + e.getMessage());
-                runOnUiThread(() -> {
-                    // Use fallback config or show error
-                    createFallbackConfig();
-                    populateModelSpinner();
-                });
+                updateStatus("unable to load model config");
             }
 
             @Override
             public void onResponse(Call call, Response response) throws IOException {
                 try {
                     String responseBody = response.body().string();
+                    Log.i(TAG, responseBody);
                     upscalersConfig = new JSONObject(responseBody);
 
                     runOnUiThread(() -> {
@@ -190,53 +187,10 @@ public class MainActivity extends AppCompatActivity {
                     });
                 } catch (Exception e) {
                     Log.e(TAG, "Error parsing upscalers config: " + e.getMessage());
-                    runOnUiThread(() -> {
-                        createFallbackConfig();
-                        populateModelSpinner();
-                    });
+                    updateStatus("unable to load model config");
                 }
             }
         });
-    }
-
-    private void createFallbackConfig() {
-        try {
-            // Create fallback config based on the structure you provided
-            upscalersConfig = new JSONObject();
-
-            JSONObject plusModel = new JSONObject();
-            plusModel.put("help", "the original deep RRDB net of ESRGAN");
-            plusModel.put("fx", true);
-            plusModel.put("price_min", 1);
-            plusModel.put("price_max", 3);
-
-            JSONObject plusScales = new JSONObject();
-            JSONObject plusScale4 = new JSONObject();
-            plusScale4.put("max_size_input", 2048 * 1024);
-            JSONObject plusScale2 = new JSONObject();
-            plusScale2.put("max_size_input", 2048 * 4096);
-            plusScales.put("4", plusScale4);
-            plusScales.put("2", plusScale2);
-            plusModel.put("scales", plusScales);
-
-            JSONObject generalModel = new JSONObject();
-            generalModel.put("help", "a simple vgg net that supports higher resolution");
-            generalModel.put("fx", true);
-            generalModel.put("price_min", 1);
-            generalModel.put("price_max", 3);
-
-            JSONObject generalScales = new JSONObject();
-            JSONObject generalScale4 = new JSONObject();
-            generalScale4.put("max_size_input", 4096 * 4096);
-            generalScales.put("4", generalScale4);
-            generalModel.put("scales", generalScales);
-
-            upscalersConfig.put("plus", plusModel);
-            upscalersConfig.put("general", generalModel);
-
-        } catch (Exception e) {
-            Log.e(TAG, "Error creating fallback config: " + e.getMessage());
-        }
     }
 
     private void selectImage() {
@@ -359,12 +313,10 @@ public class MainActivity extends AppCompatActivity {
                 break;
             }
         }
-        if (preferredIndex == -1) {
-            for (int i = 0; i < availableModels.size(); i++) {
-                if (availableModels.get(i).equals("plus")) {
-                    preferredIndex = i;
-                    break;
-                }
+        for (int i = 0; i < availableModels.size(); i++) {
+            if (availableModels.get(i).equals("plus")) {
+                preferredIndex = i;
+                break;
             }
         }
         if (preferredIndex >= 0) {
@@ -378,12 +330,13 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void onModelChanged() {
-        @SuppressWarnings("unchecked")
         ArrayList<String> availableModels = (ArrayList<String>) spinnerModel.getTag();
 
         if (availableModels == null || spinnerModel.getSelectedItemPosition() < 0) return;
 
         String selectedModel = availableModels.get(spinnerModel.getSelectedItemPosition());
+
+
 
         try {
             JSONObject modelConfig = upscalersConfig.getJSONObject(selectedModel);
@@ -424,6 +377,7 @@ public class MainActivity extends AppCompatActivity {
                     android.R.layout.simple_spinner_item, availableScales);
             scaleAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
             spinnerScale.setAdapter(scaleAdapter);
+            spinnerScale.setSelection(availableScales.size()-1);
 
             // Enable upload button if everything is ready
             btnUpload.setEnabled(selectedImageUri != null && !availableScales.isEmpty());

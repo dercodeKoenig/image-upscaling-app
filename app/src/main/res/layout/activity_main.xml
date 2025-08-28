@@ -55,17 +55,6 @@
             android:layout_weight="1" />
     </LinearLayout>
 
-    <!-- Model Info -->
-    <TextView
-        android:id="@+id/tvModelInfo"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="8dp"
-        android:text=""
-        android:textSize="12sp"
-        android:textStyle="italic"
-        android:visibility="gone" />
-
     <!-- Scale Selection -->
     <LinearLayout
         android:layout_width="match_parent"
@@ -100,6 +89,15 @@
     <!-- Image Selection Button -->
 
     <!-- Image Preview Section -->
+    <TextView
+        android:id="@+id/tvModelInfo"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp"
+        android:text=""
+        android:textAlignment="center" />
+
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
@@ -128,6 +126,7 @@
     </FrameLayout>
 
     <!-- Upload Button -->
+
     <TextView
         android:id="@+id/tvStatus"
         android:layout_width="match_parent"

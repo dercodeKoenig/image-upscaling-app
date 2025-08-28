@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace 'net.image_upscaling.imageupscalerv2'
+    namespace 'net.image_upscaling.imageupscaler'
     compileSdk 36
 
     defaultConfig {
-        applicationId "net.image_upscaling.imageupscalerv2"
+        applicationId "net.image_upscaling.imageupscaler"
         minSdk 26
         targetSdk 36
         versionCode 1
