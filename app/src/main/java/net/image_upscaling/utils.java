@@ -1,4 +1,4 @@
-package net.image_upscaling.imageupscaler;
+package net.image_upscaling;
 
 import android.content.ContextWrapper;
 import android.os.Build;
