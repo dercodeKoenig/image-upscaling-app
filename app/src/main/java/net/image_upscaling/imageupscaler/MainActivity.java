@@ -45,8 +45,8 @@ import okhttp3.Response;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "UpscalingApp";
-    //static final String SERVER_URL = "https://image-upscaling.net";
-    static final String SERVER_URL = "https://test.image-upscaling.net";
+    static final String SERVER_URL = "https://image-upscaling.net";
+    //static final String SERVER_URL = "https://test.image-upscaling.net";
 
     private static final int REQUEST_STORAGE_PERMISSION = 1001;
     private static final int PICK_IMAGE_REQUEST = 2001;
