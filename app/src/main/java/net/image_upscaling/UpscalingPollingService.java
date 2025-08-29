@@ -108,9 +108,9 @@ public class UpscalingPollingService extends Service {
                     String notificationString = "Checking for completed images...";
                     if (pendingRequests != 9999) {
                         if (pendingRequests == 1)
-                            updateNotification("1 upscaling request processing...");
+                            notificationString = "1 upscaling request processing...";
                         else
-                            updateNotification(pendingRequests + " upscaling requests processing...");
+                            notificationString = pendingRequests + " upscaling requests processing...";
                     }
                     updateNotification(notificationString);
 
@@ -153,6 +153,7 @@ public class UpscalingPollingService extends Service {
                     JSONArray processsing = jsonResponse.getJSONArray("processing");
 
                     pendingRequests =pending.length() + processsing.length() + processed.length();
+                    Log.i(TAG, "pending requests: "+pendingRequests);
 
 
                     // Check if this request is in the processed list
