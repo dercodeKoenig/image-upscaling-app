@@ -48,8 +48,8 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "UpscalingApp";
-    //static final String SERVER_URL = "https://image-upscaling.net";
-    static final String SERVER_URL = "https://test.image-upscaling.net";
+    static final String SERVER_URL = "https://image-upscaling.net";
+    //static final String SERVER_URL = "https://test.image-upscaling.net";
 
     private static final int REQUEST_STORAGE_PERMISSION = 1001;
     private static final int PICK_IMAGE_REQUEST = 2001;
@@ -675,7 +675,6 @@ public class MainActivity extends AppCompatActivity {
 
         if (requestCode == REQUEST_STORAGE_PERMISSION) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                Toast.makeText(this, "Storage permission granted", Toast.LENGTH_SHORT).show();
             } else {
                 Toast.makeText(this, "Storage permission is required", Toast.LENGTH_LONG).show();
                 updateStatus("Permission denied: Storage permission is required");

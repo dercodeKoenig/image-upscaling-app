@@ -97,14 +97,23 @@ public class UpscalingPollingService extends Service {
     }
 
     private void startPolling() {
-        pendingRequests = 1; // so that it keeps running until it receives the actual amount
+        pendingRequests = 9999; // so that it keeps running until it receives the actual amount
         pollingRunnable = new Runnable() {
             @Override
             public void run() {
                 checkPendingRequests();
-                updateNotification(pendingRequests + " upscaling request(s) processing...");
                 if (pendingRequests > 0) {
                     handler.postDelayed(this, POLL_INTERVAL);
+
+                    String notificationString = "Checking for completed images...";
+                    if (pendingRequests != 9999) {
+                        if (pendingRequests == 1)
+                            updateNotification("1 upscaling request processing...");
+                        else
+                            updateNotification(pendingRequests + " upscaling requests processing...");
+                    }
+                    updateNotification(notificationString);
+
                 } else {
                     Log.d(TAG, "No pending requests, stopping service");
                     stopForeground(true);
