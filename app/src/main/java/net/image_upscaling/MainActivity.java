@@ -491,6 +491,10 @@ public class MainActivity extends AppCompatActivity {
                 if (selectedImageSize == 0 || maxSizeInput >= selectedImageSize) {
                     if (scaleKeyString.equals("-1"))
                         availableScales.add("4MP");
+                    else if (scaleKeyString.equals("-2"))
+                        availableScales.add("8MP");
+                    else if (scaleKeyString.equals("-3"))
+                        availableScales.add("16MP");
                     else
                         availableScales.add(scaleKeyString + "x");
                 }
@@ -546,6 +550,10 @@ public class MainActivity extends AppCompatActivity {
         String scale;
         if (scaleText.equals("4MP"))
             scale = "-1";
+        else if (scaleText.equals("8MP"))
+            scale = "-2";
+        else if (scaleText.equals("16MP"))
+            scale = "-3";
         else
             scale = scaleText.replace("x", "");
         boolean faceEnhance = checkBoxFaceEnhance.isChecked();
