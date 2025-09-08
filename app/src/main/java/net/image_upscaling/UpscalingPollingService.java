@@ -82,12 +82,12 @@ public class UpscalingPollingService extends Service {
         handler = new Handler(Looper.getMainLooper());
 
         createNotificationChannel();
-        startPolling();
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         startForeground(NOTIFICATION_ID, createStatusNotification("Checking for completed images..."));
+        startPolling();
         return START_STICKY;
     }
 
