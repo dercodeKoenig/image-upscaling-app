@@ -66,6 +66,8 @@ public class MainActivity extends AppCompatActivity {
     private JSONObject upscalersConfig;
     private int selectedImageSize = 0;
     private Uri selectedImageUri;
+    private ArrayList<String> currentScaleKeys;
+
 
     // UI Elements
     private Spinner spinnerModel;
@@ -481,53 +483,65 @@ public class MainActivity extends AppCompatActivity {
         try {
             JSONObject scales = modelConfig.getJSONObject("scales");
             ArrayList<String> availableScales = new ArrayList<>();
+            ArrayList<String> scaleKeysList = new ArrayList<>();  // Keep original keys
 
             Iterator<String> scaleKeys = scales.keys();
             while (scaleKeys.hasNext()) {
-                String scaleKeyString = scaleKeys.next();
-                JSONObject scaleConfig = scales.getJSONObject(scaleKeyString);
-                int maxSizeInput = scaleConfig.getInt("max_size_input");
+                String scaleKey = scaleKeys.next();
+                JSONObject scaleConfig = scales.getJSONObject(scaleKey);
 
-                if (selectedImageSize == 0 || maxSizeInput >= selectedImageSize) {
-                    if (scaleKeyString.equals("-1"))
-                        availableScales.add("4MP");
-                    else if (scaleKeyString.equals("-2"))
-                        availableScales.add("8MP");
-                    else if (scaleKeyString.equals("-3"))
-                        availableScales.add("16MP");
-                    else
-                        availableScales.add(scaleKeyString + "x");
-                }
+                int maxSizeInput = scaleConfig.getInt("max_size_input");
+                int minSizeInput = scaleConfig.optInt("min_size_input", -1);
+
+                if (selectedImageSize == 0)
+                    continue;
+
+                if (selectedImageSize > maxSizeInput)
+                    continue;
+
+                if (minSizeInput != -1 && selectedImageSize < minSizeInput)
+                    continue;
+
+                // ★ NEW: use display_name field
+                String displayName = scaleConfig.optString("display_name", "???");
+
+                availableScales.add(displayName);
+                scaleKeysList.add(scaleKey);
             }
 
-            ArrayAdapter<String> scaleAdapter = new ArrayAdapter<>(this,
-                    android.R.layout.simple_spinner_item, availableScales);
+            ArrayAdapter<String> scaleAdapter = new ArrayAdapter<>(
+                    this,
+                    android.R.layout.simple_spinner_item,
+                    availableScales
+            );
             scaleAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
             spinnerScale.setAdapter(scaleAdapter);
 
-            // Set selection based on last used scale or default to highest
-            int selectedScaleIndex = availableScales.size() - 1; // Default to last element
+            // --- Restore last used scale if possible ---
             String lastUsedScale = getLastUsedScale();
+            int selectedIndex = availableScales.size() - 1; // default to highest
 
             if (lastUsedScale != null) {
                 for (int i = 0; i < availableScales.size(); i++) {
                     if (availableScales.get(i).equals(lastUsedScale)) {
-                        selectedScaleIndex = i;
-                        Log.i(TAG, "Selected last used scale: " + availableScales.get(i));
+                        selectedIndex = i;
+                        Log.i(TAG, "Selected last used scale: " + lastUsedScale);
                         break;
                     }
                 }
             }
 
-            spinnerScale.setSelection(selectedScaleIndex);
+            spinnerScale.setSelection(selectedIndex);
 
-            // Enable upload button if everything is ready
+            currentScaleKeys = scaleKeysList;
+
             btnUpload.setEnabled(selectedImageUri != null && !availableScales.isEmpty());
 
         } catch (Exception e) {
             Log.e(TAG, "Error populating scale spinner: " + e.getMessage());
         }
     }
+
 
     private void openAccountPage() {
         String url = SERVER_URL + "/account?client_id=" + clientId;
@@ -546,20 +560,13 @@ public class MainActivity extends AppCompatActivity {
         updateStatus("Uploading image...");
 
         String selectedModel = spinnerModel.getSelectedItem().toString();
-        String scaleText = spinnerScale.getSelectedItem().toString();
-        String scale;
-        if (scaleText.equals("4MP"))
-            scale = "-1";
-        else if (scaleText.equals("8MP"))
-            scale = "-2";
-        else if (scaleText.equals("16MP"))
-            scale = "-3";
-        else
-            scale = scaleText.replace("x", "");
+        int selectedIndex = spinnerScale.getSelectedItemPosition();
+        String scale = currentScaleKeys.get(selectedIndex);
+
         boolean faceEnhance = checkBoxFaceEnhance.isChecked();
 
         // Save current settings as last used
-        saveLastUsedSettings(selectedModel, scaleText, faceEnhance);
+        saveLastUsedSettings(selectedModel, spinnerScale.getSelectedItem().toString(), faceEnhance);
 
         Log.i(TAG, "submit request: "+selectedModel+":"+scale);
 
