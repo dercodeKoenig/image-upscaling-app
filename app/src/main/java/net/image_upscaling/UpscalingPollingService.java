@@ -29,6 +29,7 @@ import org.json.JSONObject;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 
 import okhttp3.Call;
@@ -181,7 +182,6 @@ public class UpscalingPollingService extends Service {
 
     private void downloadProcessedImage(String downloadUrl, String filename) {
         Log.d(TAG, "Download URL: " + downloadUrl);
-        Log.d(TAG, "Filename: " + filename);
 
         Request request = new Request.Builder()
                 .url(downloadUrl)
@@ -197,8 +197,6 @@ public class UpscalingPollingService extends Service {
 
             @Override
             public void onResponse(Call call, Response response) throws IOException {
-                Log.d(TAG, "Response code: " + response.code());
-
                 if (!response.isSuccessful()) {
                     Log.e(TAG, "Server error: " + response.code());
                     return;
@@ -210,36 +208,47 @@ public class UpscalingPollingService extends Service {
                         throw new IOException("Response body is null");
                     }
 
-                    byte[] fileBytes = responseBody.bytes();
-                    Log.d(TAG, "Downloaded " + fileBytes.length + " bytes successfully");
+                    // FIX: Get the stream instead of loading all bytes into RAM
+                    InputStream inputStream = responseBody.byteStream();
 
-                    if (fileBytes.length < 100) {
-                        Log.e(TAG, "Downloaded file too small, might be corrupted: " + fileBytes.length);
-                    }
+                    // Perform the save directly on this background thread.
+                    // Do NOT post the saving logic to the main thread handler (it will freeze the UI).
+                    saveFileToGallery(inputStream, filename, responseBody.contentLength());
 
-                    handler.post(() -> saveFileToGallery(fileBytes, filename));
-
-                } catch (IOException e) {
-                    Log.e(TAG, "Error reading response: " + e.getMessage());
+                } catch (Exception e) {
+                    Log.e(TAG, "Error saving image: " + e.getMessage());
                 }
             }
         });
     }
 
-    private void saveFileToGallery(byte[] fileBytes, String filename) {
+    // Helper method to pipe streams
+    private void copyStream(InputStream in, OutputStream out) throws IOException {
+        byte[] buffer = new byte[8 * 1024]; // 8KB buffer
+        int bytesRead;
+        while ((bytesRead = in.read(buffer)) != -1) {
+            out.write(buffer, 0, bytesRead);
+        }
+    }
+
+    private void saveFileToGallery(InputStream inputStream, String filename, long expectedSize) {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                saveWithMediaStore(fileBytes, filename);
+                saveWithMediaStore(inputStream, filename);
             } else {
-                saveWithTraditionalMethod(fileBytes, filename);
+                saveWithTraditionalMethod(inputStream, filename);
             }
+
+            // Only post to Main Thread for UI updates (like notifications)
+            handler.post(() -> showSuccessNotification());
+
         } catch (Exception e) {
             Log.e(TAG, "Error saving file: " + e.getMessage());
         }
     }
 
     @TargetApi(Build.VERSION_CODES.Q)
-    private void saveWithMediaStore(byte[] fileBytes, String filename) throws IOException {
+    private void saveWithMediaStore(InputStream inputStream, String filename) throws IOException {
         ContentValues values = new ContentValues();
         values.put(MediaStore.Images.Media.DISPLAY_NAME, filename);
         values.put(MediaStore.Images.Media.MIME_TYPE, "image/png");
@@ -251,47 +260,43 @@ public class UpscalingPollingService extends Service {
         Uri itemUri = resolver.insert(collection, values);
 
         if (itemUri != null) {
+            // Write to the MediaStore OutputStream
             try (OutputStream outputStream = resolver.openOutputStream(itemUri)) {
-                outputStream.write(fileBytes);
-                outputStream.flush();
+                if (outputStream == null) throw new IOException("Failed to open output stream");
+                copyStream(inputStream, outputStream);
             }
 
             values.clear();
             values.put(MediaStore.Images.Media.IS_PENDING, 0);
             resolver.update(itemUri, values, null, null);
-
-            Log.d(TAG, "File saved successfully with MediaStore: " + filename);
-            showSuccessNotification();
+            Log.d(TAG, "File saved successfully with MediaStore");
         } else {
             throw new IOException("Failed to create MediaStore entry");
         }
     }
 
-    private void saveWithTraditionalMethod(byte[] fileBytes, String filename) throws IOException {
+    private void saveWithTraditionalMethod(InputStream inputStream, String filename) throws IOException {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
                 != PackageManager.PERMISSION_GRANTED) {
-            Log.e(TAG, "WRITE_EXTERNAL_STORAGE permission not granted");
             throw new IOException("Storage permission not granted");
         }
 
         File downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-        if (!downloadsDir.exists()) {
-            downloadsDir.mkdirs();
-        }
+        if (!downloadsDir.exists()) downloadsDir.mkdirs();
 
         File file = new File(downloadsDir, filename);
+
+        // Write to File OutputStream
         try (FileOutputStream fos = new FileOutputStream(file)) {
-            fos.write(fileBytes);
-            fos.flush();
+            copyStream(inputStream, fos);
         }
 
         MediaScannerConnection.scanFile(this,
                 new String[]{file.getAbsolutePath()},
                 new String[]{"image/png"},
-                (path, uri) -> Log.d(TAG, "Media scan completed for: " + path));
+                (path, uri) -> Log.d(TAG, "Media scan completed"));
 
-        Log.d(TAG, "File saved successfully (traditional method): " + filename);
-        showSuccessNotification();
+        Log.d(TAG, "File saved successfully (traditional)");
     }
 
     private void createNotificationChannel() {
