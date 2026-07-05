@@ -267,8 +267,15 @@ public class MainActivity extends AppCompatActivity {
     private void selectImage(Uri imageUri) {
         selectedImageUri = imageUri;
         if (selectedImageUri != null) {
-            binding.imagePreview.setImageURI(selectedImageUri);
-            binding.tvNoImage.setVisibility(View.GONE);
+            try {
+                binding.imagePreview.setImageURI(selectedImageUri);
+                binding.tvNoImage.setVisibility(View.GONE);
+            } catch (Exception | OutOfMemoryError e) {
+                Log.e(TAG, "Failed to load preview: " + e.getMessage());
+                binding.imagePreview.setImageDrawable(null);
+                binding.tvNoImage.setText("Preview unavailable (Image probably too large)");
+                binding.tvNoImage.setVisibility(View.VISIBLE);
+            }
             binding.imagePreview.setVisibility(View.VISIBLE);
             binding.btnSelectImage.setText(R.string.btn_select_different_image);
             binding.spinnerModel.setVisibility(View.VISIBLE);
@@ -277,6 +284,7 @@ public class MainActivity extends AppCompatActivity {
             calculateImageSizeAndUpdateModels();
             updateUploadButtonState();
         } else {
+            binding.tvNoImage.setText(R.string.no_image_text);
             binding.tvNoImage.setVisibility(View.VISIBLE);
             binding.imagePreview.setVisibility(View.GONE);
             binding.imagePreview.setImageURI(null);
