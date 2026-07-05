@@ -90,13 +90,26 @@
 
     <!-- Face Enhancement Option -->
 
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginBottom="16dp">
+
         <CheckBox
             android:id="@+id/checkBoxFaceEnhance"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
             android:text="Enable Face Enhancement"
-            android:visibility="invisible" />
+            android:visibility="gone" />
+
+        <CheckBox
+            android:id="@+id/checkBoxWebP"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/use_webp_label"
+            android:checked="true" />
+    </LinearLayout>
 
 
     <!-- Image Selection Button -->
@@ -125,7 +138,7 @@
             android:layout_height="wrap_content"
             android:layout_gravity="center"
             android:padding="24dp"
-            android:text="No image selected. Click 'select image' or use the share button in your image gallery!"
+            android:text="@string/no_image_text"
             android:textColor="#888888"
             android:textStyle="italic" />
     </FrameLayout>
@@ -138,7 +151,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
         android:layout_marginBottom="8dp"
-        android:text="Select an image to begin"
+        android:text="@string/status_initial"
         android:textAlignment="center" />
 
     <Button
@@ -146,7 +159,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginBottom="8dp"
-        android:text="Select Image" />
+        android:text="@string/btn_select_image" />
 
     <Button
         android:id="@+id/btnUpload"
@@ -154,7 +167,7 @@
         android:layout_height="wrap_content"
         android:layout_marginBottom="8dp"
         android:enabled="false"
-        android:text="Upload and Process" />
+        android:text="@string/btn_upload" />
 
     <!-- Status Messages -->
 

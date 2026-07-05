@@ -4,14 +4,14 @@ plugins {
 
 android {
     namespace 'net.image_upscaling'
-    compileSdk 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId "net.image_upscaling"
         minSdk 26
-        targetSdk 36
-        versionCode 204
-        versionName "2.4"
+        targetSdk = 37
+        versionCode 300
+        versionName "3.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -22,6 +22,10 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+    buildFeatures {
+        viewBinding true
+    }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_11
         targetCompatibility JavaVersion.VERSION_11
@@ -29,7 +33,7 @@ android {
 }
 
 dependencies {
-    implementation 'com.squareup.okhttp3:okhttp:4.9.3'
+    implementation 'com.squareup.okhttp3:okhttp:5.4.0'
 
     implementation libs.appcompat
     implementation libs.material

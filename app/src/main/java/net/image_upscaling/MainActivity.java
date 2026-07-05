@@ -3,11 +3,9 @@ package net.image_upscaling;
 import android.Manifest;
 import android.content.ContentResolver;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.net.InetAddresses;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -16,15 +14,15 @@ import android.os.Looper;
 import android.util.Log;
 import android.view.View;
 import android.widget.ArrayAdapter;
-import android.widget.Button;
-import android.widget.CheckBox;
-import android.widget.ImageView;
-import android.widget.Spinner;
-import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+
+import net.image_upscaling.databinding.ActivityMainBinding;
 
 import org.json.JSONObject;
 
@@ -33,94 +31,100 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.Objects;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import okhttp3.Call;
 import okhttp3.Callback;
-import okhttp3.Cookie;
-import okhttp3.CookieJar;
-import okhttp3.HttpUrl;
 import okhttp3.MediaType;
-import okhttp3.MultipartBody;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
 import okhttp3.RequestBody;
 import okhttp3.Response;
+import okio.BufferedSink;
+import okio.Okio;
+import okio.Source;
+
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "UpscalingApp";
-    static final String SERVER_URL = "https://image-upscaling.net";
-    //static final String SERVER_URL = "https://test.image-upscaling.net";
 
-    private static final int REQUEST_STORAGE_PERMISSION = 1001;
-    private static final int PICK_IMAGE_REQUEST = 2001;
+    private ActivityMainBinding binding;
+    private ApiService apiService;
+    private SettingsManager settingsManager;
 
-    // Cache keys for SharedPreferences
-    private static final String PREFS_NAME = "UpscalingAppPrefs";
-    private static final String KEY_CACHED_CONFIG = "cached_config";
-    private static final String KEY_LAST_MODEL = "last_model";
-    private static final String KEY_LAST_SCALE = "last_scale";
-    private static final String KEY_LAST_FACE_ENHANCE = "last_face_enhance";
-
-    private String clientId;
-    private OkHttpClient httpClient;
     private JSONObject upscalersConfig;
     private int selectedImageSize = 0;
     private Uri selectedImageUri;
     private ArrayList<String> currentScaleKeys;
 
+    private final ExecutorService executorService = Executors.newSingleThreadExecutor();
+    private int configRetryCount = 0;
+    private static final int MAX_CONFIG_RETRIES = 5;
 
-    // UI Elements
-    private Spinner spinnerModel;
-    private Spinner spinnerScale;
-    private CheckBox checkBoxFaceEnhance;
-    private Button btnSelectImage;
-    private Button btnAccount;
-    private Button btnUpload;
-    private ImageView imagePreview;
-    private TextView tvNoImage;
-    private TextView tvStatus;
-    private TextView tvModelInfo;
+    private final ActivityResultLauncher<String> pickImageLauncher = registerForActivityResult(
+            new ActivityResultContracts.GetContent(),
+            uri -> {
+                if (uri != null) {
+                    selectImage(uri);
+                }
+            }
+    );
+
+    private final ActivityResultLauncher<String[]> requestPermissionsLauncher = registerForActivityResult(
+            new ActivityResultContracts.RequestMultiplePermissions(),
+            result -> {
+                boolean allGranted = true;
+                for (Boolean isGranted : result.values()) {
+                    if (!isGranted) {
+                        allGranted = false;
+                        break;
+                    }
+                }
+                if (!allGranted) {
+                    Toast.makeText(this, "Permissions are required for full functionality", Toast.LENGTH_LONG).show();
+                }
+                updateUploadButtonState();
+            }
+    );
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+        binding = ActivityMainBinding.inflate(getLayoutInflater());
+        setContentView(binding.getRoot());
 
-        clientId = utils.getClientId(this);
+        apiService = new ApiService(this);
+        settingsManager = new SettingsManager(this);
+
         initViews();
-        initHttpClient();
-        requestStoragePermissions();
+        checkPermissions();
 
-        // Load cached config first, then check for updates
         loadCachedConfig();
         loadUpscalersConfig();
 
-        // Handle shared image if app was launched from share intent
         onNewIntent(getIntent());
 
-        // Start polling service in case there is already a request waiting
-        Intent serviceIntent = new Intent(MainActivity.this, UpscalingPollingService.class);
-        startForegroundService(serviceIntent);
+        Intent serviceIntent = new Intent(this, UpscalingPollingService.class);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(serviceIntent);
+        } else {
+            startService(serviceIntent);
+        }
     }
 
     private void initViews() {
-        spinnerModel = findViewById(R.id.spinnerModel);
-        spinnerScale = findViewById(R.id.spinnerScale);
-        checkBoxFaceEnhance = findViewById(R.id.checkBoxFaceEnhance);
-        btnSelectImage = findViewById(R.id.btnSelectImage);
-        btnAccount = findViewById(R.id.btnAccount);
-        btnUpload = findViewById(R.id.btnUpload);
-        imagePreview = findViewById(R.id.imagePreview);
-        tvNoImage = findViewById(R.id.tvNoImage);
-        tvStatus = findViewById(R.id.tvStatus);
-        tvModelInfo = findViewById(R.id.tvModelInfo);
+        binding.btnSelectImage.setOnClickListener(v -> {
+            if (hasStoragePermission()) {
+                pickImageLauncher.launch("image/*");
+            } else {
+                checkPermissions();
+            }
+        });
+        binding.btnAccount.setOnClickListener(v -> openAccountPage());
+        binding.btnUpload.setOnClickListener(v -> submitUpscalingRequest());
 
-        btnSelectImage.setOnClickListener(v -> selectImage());
-        btnAccount.setOnClickListener(v -> openAccountPage());
-        btnUpload.setOnClickListener(v -> submitUpscalingRequest());
+        binding.checkBoxWebP.setChecked(settingsManager.isUseWebP());
+        binding.checkBoxWebP.setOnCheckedChangeListener((buttonView, isChecked) -> settingsManager.setUseWebP(isChecked));
 
-        // Set up spinner change listeners
-        spinnerModel.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+        binding.spinnerModel.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
                 onModelChanged();
@@ -130,33 +134,71 @@ public class MainActivity extends AppCompatActivity {
             public void onNothingSelected(android.widget.AdapterView<?> parent) {}
         });
 
-        // Initialize UI state
         selectImage(null);
-        updateStatus("Select an image to begin");
+        updateUploadButtonState();
     }
 
-    private void initHttpClient() {
-        httpClient = new OkHttpClient.Builder()
-                .cookieJar(new CookieJar() {
-                    @Override
-                    public void saveFromResponse(HttpUrl url, java.util.List<Cookie> cookies) {}
+    @Override
+    protected void onResume() {
+        super.onResume();
+        updateUploadButtonState();
+    }
 
-                    @Override
-                    public java.util.List<Cookie> loadForRequest(HttpUrl url) {
-                        return java.util.Collections.singletonList(new Cookie.Builder()
-                                .name("client_id")
-                                .value(clientId)
-                                .domain(url.host())
-                                .build());
-                    }
-                })
-                .build();
+    private void checkPermissions() {
+        ArrayList<String> permissions = new ArrayList<>();
+
+        // Notification permission for Android 13+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                permissions.add(Manifest.permission.POST_NOTIFICATIONS);
+            }
+        }
+
+        // ONLY request WRITE for Android 9 and older
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+                permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
+            }
+        }
+
+        if (!permissions.isEmpty()) {
+            requestPermissionsLauncher.launch(permissions.toArray(new String[0]));
+        }
+    }
+
+    private boolean hasStoragePermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // On Android 10+, we don't strictly need WRITE permission for MediaStore to save to Pictures
+            return true;
+        }
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void updateUploadButtonState() {
+        boolean hasPermission = hasStoragePermission();
+        if (!hasPermission) {
+            updateStatus(getString(R.string.status_permission_required));
+            binding.btnUpload.setEnabled(false);
+            binding.btnSelectImage.setText(R.string.btn_select_image);
+        } else {
+            if (selectedImageUri == null) {
+                updateStatus(getString(R.string.status_initial));
+                binding.btnUpload.setEnabled(false);
+                binding.btnSelectImage.setText(R.string.btn_select_image);
+            } else {
+                updateStatus(getString(R.string.status_image_selected));
+                binding.btnUpload.setEnabled(currentScaleKeys != null && !currentScaleKeys.isEmpty());
+                binding.btnSelectImage.setText(R.string.btn_select_different_image);
+            }
+        }
     }
 
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
-        handleSharedImage(intent);
+        if (intent != null) {
+            handleSharedImage(intent);
+        }
     }
 
     private void handleSharedImage(Intent intent) {
@@ -174,229 +216,124 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void loadCachedConfig() {
-        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        String cachedConfigJson = prefs.getString(KEY_CACHED_CONFIG, null);
-
+        String cachedConfigJson = settingsManager.getCachedConfig();
         if (cachedConfigJson != null) {
             try {
                 upscalersConfig = new JSONObject(cachedConfigJson);
-
                 populateModelSpinner();
-
                 Log.i(TAG, "Loaded cached config successfully");
             } catch (Exception e) {
                 Log.e(TAG, "Error parsing cached config: " + e.getMessage());
-                // Clear invalid cached config
-                prefs.edit().remove(KEY_CACHED_CONFIG).apply();
+                settingsManager.clearCachedConfig();
             }
         }
-    }
-
-    private void saveConfigToCache(JSONObject config) {
-        try {
-            SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-            String configJson = config.toString();
-
-            prefs.edit()
-                    .putString(KEY_CACHED_CONFIG, configJson)
-                    .apply();
-
-            Log.i(TAG, "Config saved to cache");
-        } catch (Exception e) {
-            Log.e(TAG, "Error saving config to cache: " + e.getMessage());
-        }
-    }
-
-    private boolean hasConfigChanged(JSONObject newConfig) {
-        try {
-            SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-            String cachedConfig = prefs.getString(KEY_CACHED_CONFIG, null);
-            if (cachedConfig == null) return true;
-            String cachedConfigHash = String.valueOf(cachedConfig.hashCode());
-
-            String newConfigJson = newConfig.toString();
-            String newHash = String.valueOf(newConfigJson.hashCode());
-
-            boolean changed = !cachedConfigHash.equals(newHash);
-            Log.i(TAG, "Config changed: " + changed + " (cached: " + cachedConfigHash + ", new: " + newHash + ")");
-            return changed;
-        } catch (Exception e) {
-            Log.e(TAG, "Error checking config changes: " + e.getMessage());
-            return true; // Assume changed on error
-        }
-    }
-
-    private String getLastUsedModel(){
-        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        return prefs.getString(KEY_LAST_MODEL, null);
-    }
-    private String getLastUsedScale(){
-        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        return prefs.getString(KEY_LAST_SCALE, null);
-    }
-    private boolean getLastUsedFaceEnhanceValue(){
-        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        return prefs.getBoolean(KEY_LAST_FACE_ENHANCE, false);
-    }
-    private void saveLastUsedSettings(String model, String scale, boolean faceEnhance) {
-        SharedPreferences prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE);
-        prefs.edit()
-                .putString(KEY_LAST_MODEL, model)
-                .putString(KEY_LAST_SCALE, scale)
-                .putBoolean(KEY_LAST_FACE_ENHANCE, faceEnhance)
-                .apply();
-
-        Log.i(TAG, "Saved last used settings: model=" + model + ", scale=" + scale + ", faceEnhance=" + faceEnhance);
     }
 
     private void loadUpscalersConfig() {
-        Log.i(TAG, "checking for new config...");
-        String url = SERVER_URL + "/get_upscalers_config";
-
-        Request request = new Request.Builder()
-                .url(url)
-                .get()
-                .header("Origin", "android_app")
-                .build();
-
-        httpClient.newCall(request).enqueue(new Callback() {
+        apiService.getUpscalersConfig(new Callback() {
             @Override
-            public void onFailure(Call call, IOException e) {
+            public void onFailure(@NonNull Call call, @NonNull IOException e) {
                 Log.e(TAG, "Failed to load upscalers config: " + e.getMessage());
-                new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                    loadUpscalersConfig();
-                }, 5000);
+                if (configRetryCount < MAX_CONFIG_RETRIES) {
+                    configRetryCount++;
+                    new Handler(Looper.getMainLooper()).postDelayed(() -> loadUpscalersConfig(), 5000 * configRetryCount);
+                }
             }
 
             @Override
-            public void onResponse(Call call, Response response) throws IOException {
+            public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
                 try {
                     String responseBody = response.body().string();
-                    Log.i(TAG, responseBody);
                     JSONObject newConfig = new JSONObject(responseBody);
 
-                    // Check if config has changed
                     if (hasConfigChanged(newConfig)) {
                         upscalersConfig = newConfig;
-                        saveConfigToCache(newConfig);
-
-                        runOnUiThread(() -> {
-                            populateModelSpinner();
-                        });
+                        settingsManager.saveConfigToCache(newConfig);
+                        runOnUiThread(() -> populateModelSpinner());
                     }
                 } catch (Exception e) {
                     Log.e(TAG, "Error parsing upscalers config: " + e.getMessage());
-                    new Handler(Looper.getMainLooper()).postDelayed(() -> {
-                        loadUpscalersConfig();
-                    }, 5000);
                 }
             }
         });
     }
 
-    private void selectImage() {
-        Intent intent = new Intent(Intent.ACTION_PICK);
-        intent.setType("image/*");
-        startActivityForResult(intent, PICK_IMAGE_REQUEST);
+    private boolean hasConfigChanged(JSONObject newConfig) {
+        String cachedConfig = settingsManager.getCachedConfig();
+        if (cachedConfig == null) return true;
+        return cachedConfig.hashCode() != newConfig.toString().hashCode();
     }
 
     private void selectImage(Uri imageUri) {
         selectedImageUri = imageUri;
-
         if (selectedImageUri != null) {
-            imagePreview.setImageURI(selectedImageUri);
-            tvNoImage.setVisibility(View.GONE);
-            imagePreview.setVisibility(View.VISIBLE);
-            btnSelectImage.setText("Select a different Image");
-
-            spinnerModel.setVisibility(View.VISIBLE);
-            spinnerScale.setVisibility(View.VISIBLE);
-
-            // Calculate image size and update available models
+            binding.imagePreview.setImageURI(selectedImageUri);
+            binding.tvNoImage.setVisibility(View.GONE);
+            binding.imagePreview.setVisibility(View.VISIBLE);
+            binding.btnSelectImage.setText(R.string.btn_select_different_image);
+            binding.spinnerModel.setVisibility(View.VISIBLE);
+            binding.spinnerScale.setVisibility(View.VISIBLE);
+            
             calculateImageSizeAndUpdateModels();
+            updateUploadButtonState();
         } else {
-            tvNoImage.setVisibility(View.VISIBLE);
-            imagePreview.setVisibility(View.GONE);
-            btnSelectImage.setText("Select Image");
-            btnUpload.setEnabled(false);
+            binding.tvNoImage.setVisibility(View.VISIBLE);
+            binding.imagePreview.setVisibility(View.GONE);
+            binding.imagePreview.setImageURI(null);
+            binding.btnSelectImage.setText(R.string.btn_select_image);
+            binding.btnUpload.setEnabled(false);
             selectedImageSize = 0;
-
-            spinnerModel.setVisibility(View.INVISIBLE);
-            spinnerScale.setVisibility(View.INVISIBLE);
-            tvModelInfo.setText("");
-        }
-    }
-
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        super.onActivityResult(requestCode, resultCode, data);
-
-        if (requestCode == PICK_IMAGE_REQUEST && resultCode == RESULT_OK && data != null) {
-            selectImage(data.getData());
+            binding.spinnerModel.setVisibility(View.INVISIBLE);
+            binding.spinnerScale.setVisibility(View.INVISIBLE);
+            binding.tvModelInfo.setText("");
+            binding.checkBoxFaceEnhance.setVisibility(View.GONE);
         }
     }
 
     private void calculateImageSizeAndUpdateModels() {
         if (selectedImageUri == null) return;
+        updateStatus(getString(R.string.status_analyzing));
+        executorService.execute(() -> {
+            try {
+                ContentResolver contentResolver = getContentResolver();
+                InputStream inputStream = contentResolver.openInputStream(selectedImageUri);
+                if (inputStream != null) {
+                    BitmapFactory.Options options = new BitmapFactory.Options();
+                    options.inJustDecodeBounds = true;
+                    BitmapFactory.decodeStream(inputStream, null, options);
+                    inputStream.close();
 
-        try {
-            ContentResolver contentResolver = getContentResolver();
-            InputStream inputStream = contentResolver.openInputStream(selectedImageUri);
-            if (inputStream != null) {
-                Bitmap bitmap = BitmapFactory.decodeStream(inputStream);
-                inputStream.close();
+                    int width = options.outWidth;
+                    int height = options.outHeight;
+                    selectedImageSize = width * height;
 
-                if (bitmap != null) {
-                    selectedImageSize = bitmap.getWidth() * bitmap.getHeight();
-                    Log.d(TAG, "Selected image size: " + selectedImageSize + " pixels");
-
-                    populateModelSpinner();
-                    updateStatus("Image selected. Choose model and scale, then click 'Upload and Process'.");
-                } else {
-                    updateStatus("Error: Could not decode image");
+                    runOnUiThread(() -> {
+                        populateModelSpinner();
+                    });
                 }
+            } catch (IOException e) {
+                Log.e(TAG, "Error calculating image size: " + e.getMessage());
+                runOnUiThread(() -> updateStatus(getString(R.string.status_error_analyze)));
             }
-        } catch (IOException e) {
-            Log.e(TAG, "Error calculating image size: " + e.getMessage());
-            updateStatus("Error: Could not analyze image");
-        }
+        });
     }
 
     private void populateModelSpinner() {
-        if (upscalersConfig == null) return;
+        if (upscalersConfig == null || selectedImageSize == 0) return;
 
         ArrayList<String> availableModels = new ArrayList<>();
-        ArrayList<String> modelLabels = new ArrayList<>();
-
         try {
             Iterator<String> keys = upscalersConfig.keys();
             while (keys.hasNext()) {
                 String modelKey = keys.next();
                 JSONObject modelConfig = upscalersConfig.getJSONObject(modelKey);
-
-                // Check if this model supports the selected image size
-                boolean isSupported = false;
-                if (selectedImageSize > 0) {
-                    JSONObject scales = modelConfig.getJSONObject("scales");
-                    Iterator<String> scaleKeys = scales.keys();
-                    while (scaleKeys.hasNext()) {
-                        String scaleKey = scaleKeys.next();
-                        JSONObject scaleConfig = scales.getJSONObject(scaleKey);
-                        int maxSizeInput = scaleConfig.getInt("max_size_input");
-                        if (maxSizeInput >= selectedImageSize) {
-                            isSupported = true;
-                            break;
-                        }
+                JSONObject scales = modelConfig.getJSONObject("scales");
+                Iterator<String> scaleKeys = scales.keys();
+                while (scaleKeys.hasNext()) {
+                    if (scales.getJSONObject(scaleKeys.next()).getInt("max_size_input") >= selectedImageSize) {
+                        availableModels.add(modelKey);
+                        break;
                     }
-                } else {
-                    return; // no image selected
-                }
-
-                if (isSupported) {
-                    availableModels.add(modelKey);
-                    String help = modelConfig.optString("help", modelKey);
-                    //modelLabels.add(modelKey + " - " + help);
-                    modelLabels.add(modelKey);
                 }
             }
         } catch (Exception e) {
@@ -404,296 +341,193 @@ public class MainActivity extends AppCompatActivity {
         }
 
         if (availableModels.isEmpty()) {
+            currentScaleKeys = null;
+            binding.spinnerModel.setVisibility(View.INVISIBLE);
+            binding.spinnerScale.setVisibility(View.INVISIBLE);
+            binding.tvModelInfo.setText("");
+            binding.checkBoxFaceEnhance.setVisibility(View.GONE);
             resetUI();
-            updateStatus("Error: Image too large for available models");
+            updateStatus(getString(R.string.status_error_large));
             return;
         }
 
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
-                android.R.layout.simple_spinner_item, modelLabels);
+        binding.spinnerModel.setVisibility(View.VISIBLE);
+        binding.spinnerScale.setVisibility(View.VISIBLE);
+        updateStatus(getString(R.string.status_image_selected));
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, availableModels);
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        spinnerModel.setAdapter(adapter);
+        binding.spinnerModel.setAdapter(adapter);
 
-        // Set selection based on priority: last used > plus > general > first available
-        int selectedIndex = -1;
-
-        // First, try to find the last used model
-        String lastUsedModel = getLastUsedModel();
-        if (lastUsedModel != null) {
-            for (int i = 0; i < availableModels.size(); i++) {
-                if (availableModels.get(i).equals(lastUsedModel)) {
-                    selectedIndex = i;
-                    Log.i(TAG, "Selected last used model: " + lastUsedModel);
-                    break;
-                }
-            }
+        String lastUsedModel = settingsManager.getLastUsedModel();
+        int selectedIndex = 0;
+        if (lastUsedModel != null && availableModels.contains(lastUsedModel)) {
+            selectedIndex = availableModels.indexOf(lastUsedModel);
+        } else if (availableModels.contains("general")) {
+            selectedIndex = availableModels.indexOf("general");
         }
-        if (selectedIndex == -1) {
-            // Fallback to preferred defaults
-            for (int i = 0; i < availableModels.size(); i++) {
-                if (availableModels.get(i).equals("general")) {
-                    selectedIndex = i;
-                    break;
-                }
-            }
-            for (int i = 0; i < availableModels.size(); i++) {
-                if (availableModels.get(i).equals("plus")) {
-                    selectedIndex = i;
-                    break;
-                }
-            }
-        }
-
-        spinnerModel.setSelection(selectedIndex);
-
+        binding.spinnerModel.setSelection(selectedIndex);
         onModelChanged();
+        updateUploadButtonState();
     }
 
     private void onModelChanged() {
+        Object selectedItem = binding.spinnerModel.getSelectedItem();
+        if (selectedItem == null) return;
+        String selectedModel = selectedItem.toString();
+        binding.checkBoxFaceEnhance.setChecked(false);
 
-        String selectedModel = spinnerModel.getSelectedItem().toString();
-        checkBoxFaceEnhance.setChecked(false);
-
-        JSONObject modelConfig;
         try {
-            modelConfig = upscalersConfig.getJSONObject(selectedModel);
+            JSONObject modelConfig = upscalersConfig.getJSONObject(selectedModel);
+            binding.tvModelInfo.setText(modelConfig.optString("help", ""));
+            boolean supportsFx = modelConfig.optBoolean("fx", false);
+            binding.checkBoxFaceEnhance.setVisibility(supportsFx ? View.VISIBLE : View.GONE);
+            if (supportsFx) {
+                binding.checkBoxFaceEnhance.setChecked(settingsManager.getLastUsedFaceEnhanceValue());
+            }
+            populateScaleSpinner(modelConfig);
         } catch (Exception e) {
             Log.e(TAG, "Error in onModelChanged: " + e.getMessage());
-            return;
         }
-
-        // Update model info text
-        String help = modelConfig.optString("help", "");
-        tvModelInfo.setText(help);
-
-        // Update face enhancement checkbox visibility and state
-        boolean supportsFx = modelConfig.optBoolean("fx", false);
-        checkBoxFaceEnhance.setVisibility(supportsFx ? View.VISIBLE : View.INVISIBLE);
-
-        // Set face enhancement state from last used settings if this is the same model
-        if (supportsFx) {
-            checkBoxFaceEnhance.setChecked(getLastUsedFaceEnhanceValue());
-        }
-
-        // Populate scale spinner
-        populateScaleSpinner(modelConfig);
     }
 
     private void populateScaleSpinner(JSONObject modelConfig) {
         try {
             JSONObject scales = modelConfig.getJSONObject("scales");
-            ArrayList<String> availableScales = new ArrayList<>();
-            ArrayList<String> scaleKeysList = new ArrayList<>();  // Keep original keys
+            ArrayList<String> displayNames = new ArrayList<>();
+            currentScaleKeys = new ArrayList<>();
 
-            Iterator<String> scaleKeys = scales.keys();
-            while (scaleKeys.hasNext()) {
-                String scaleKey = scaleKeys.next();
-                JSONObject scaleConfig = scales.getJSONObject(scaleKey);
-
-                int maxSizeInput = scaleConfig.getInt("max_size_input");
-                int minSizeInput = scaleConfig.optInt("min_size_input", -1);
-
-                if (selectedImageSize == 0)
-                    continue;
-
-                if (selectedImageSize > maxSizeInput)
-                    continue;
-
-                if (minSizeInput != -1 && selectedImageSize < minSizeInput)
-                    continue;
-
-                // ★ NEW: use display_name field
-                String displayName = scaleConfig.optString("display_name", "???");
-
-                availableScales.add(displayName);
-                scaleKeysList.add(scaleKey);
-            }
-
-            ArrayAdapter<String> scaleAdapter = new ArrayAdapter<>(
-                    this,
-                    android.R.layout.simple_spinner_item,
-                    availableScales
-            );
-            scaleAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-            spinnerScale.setAdapter(scaleAdapter);
-
-            // --- Restore last used scale if possible ---
-            String lastUsedScale = getLastUsedScale();
-            int selectedIndex = availableScales.size() - 1; // default to highest
-
-            if (lastUsedScale != null) {
-                for (int i = 0; i < availableScales.size(); i++) {
-                    if (availableScales.get(i).equals(lastUsedScale)) {
-                        selectedIndex = i;
-                        Log.i(TAG, "Selected last used scale: " + lastUsedScale);
-                        break;
-                    }
+            Iterator<String> keys = scales.keys();
+            while (keys.hasNext()) {
+                String key = keys.next();
+                JSONObject config = scales.getJSONObject(key);
+                if (selectedImageSize <= config.getInt("max_size_input") && selectedImageSize >= config.optInt("min_size_input", -1)) {
+                    displayNames.add(config.optString("display_name", key));
+                    currentScaleKeys.add(key);
                 }
             }
 
-            spinnerScale.setSelection(selectedIndex);
+            ArrayAdapter<String> adapter = new ArrayAdapter<>(this, android.R.layout.simple_spinner_item, displayNames);
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+            binding.spinnerScale.setAdapter(adapter);
 
-            currentScaleKeys = scaleKeysList;
-
-            btnUpload.setEnabled(selectedImageUri != null && !availableScales.isEmpty());
-
+            String lastUsedScale = settingsManager.getLastUsedScale();
+            int index = displayNames.size() - 1;
+            if (lastUsedScale != null && displayNames.contains(lastUsedScale)) {
+                index = displayNames.indexOf(lastUsedScale);
+            }
+            binding.spinnerScale.setSelection(index);
+            updateUploadButtonState();
         } catch (Exception e) {
             Log.e(TAG, "Error populating scale spinner: " + e.getMessage());
         }
     }
 
-
     private void openAccountPage() {
-        String url = SERVER_URL + "/account?client_id=" + clientId;
-        Intent intent = new Intent(Intent.ACTION_VIEW);
-        intent.setData(Uri.parse(url));
+        String url = apiService.SERVER_URL + "/account?client_id=" + apiService.getClientId();
+        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
         startActivity(intent);
     }
 
     private void submitUpscalingRequest() {
-        if (selectedImageUri == null) {
-            Toast.makeText(this, "Please select an image first", Toast.LENGTH_SHORT).show();
+        if (selectedImageUri == null) return;
+
+        Object selectedModelObj = binding.spinnerModel.getSelectedItem();
+        Object selectedScaleObj = binding.spinnerScale.getSelectedItem();
+
+        if (selectedModelObj == null || selectedScaleObj == null) {
+            updateUploadButtonState();
             return;
         }
 
-        btnUpload.setEnabled(false);
-        updateStatus("Uploading image...");
+        binding.btnUpload.setEnabled(false);
+        updateStatus(getString(R.string.status_uploading));
 
-        String selectedModel = spinnerModel.getSelectedItem().toString();
-        int selectedIndex = spinnerScale.getSelectedItemPosition();
-        String scale = currentScaleKeys.get(selectedIndex);
+        String model = selectedModelObj.toString();
+        String scale = currentScaleKeys.get(binding.spinnerScale.getSelectedItemPosition());
+        boolean fx = binding.checkBoxFaceEnhance.isChecked();
+        boolean useWebP = binding.checkBoxWebP.isChecked();
 
-        boolean faceEnhance = checkBoxFaceEnhance.isChecked();
+        settingsManager.saveLastUsedSettings(model, selectedScaleObj.toString(), fx);
+        settingsManager.setUseWebP(useWebP);
 
-        // Save current settings as last used
-        saveLastUsedSettings(selectedModel, spinnerScale.getSelectedItem().toString(), faceEnhance);
+        executorService.execute(() -> {
+            try {
+                ContentResolver cr = getContentResolver();
+                String mime = cr.getType(selectedImageUri);
+                if (mime == null) mime = "image/jpeg";
+                String name = "img_" + System.currentTimeMillis() + ".jpg";
 
-        Log.i(TAG, "submit request: "+selectedModel+":"+scale);
+                MediaType mediaType = MediaType.parse(mime);
+                RequestBody imageBody = new RequestBody() {
+                    @Override
+                    public MediaType contentType() {
+                        return mediaType;
+                    }
 
-        try {
-            ContentResolver contentResolver = getContentResolver();
-            String filename = "image_" + System.currentTimeMillis() + ".jpg";
-            String mimeType = contentResolver.getType(selectedImageUri);
-            if (mimeType == null) mimeType = "image/*";
-
-            InputStream inputStream = contentResolver.openInputStream(selectedImageUri);
-            if (inputStream == null) {
-                updateStatus("Error: Could not open file stream");
-                btnUpload.setEnabled(true);
-                return;
-            }
-
-            // Convert InputStream to byte array
-            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-            int bytesRead;
-            byte[] data = new byte[16384];
-
-            while ((bytesRead = inputStream.read(data, 0, data.length)) != -1) {
-                buffer.write(data, 0, bytesRead);
-            }
-            inputStream.close();
-
-            byte[] imageBytes = buffer.toByteArray();
-
-            // Upload image first
-            String uploadUrl = SERVER_URL + "/upscaling_upload";
-
-            MultipartBody.Builder builder = new MultipartBody.Builder().setType(MultipartBody.FORM);
-            builder.addFormDataPart("image", filename,
-                    RequestBody.create(MediaType.parse(mimeType), imageBytes));
-
-            builder.addFormDataPart("scale", String.valueOf(scale));
-            builder.addFormDataPart("model", selectedModel);
-
-            RequestBody requestBody = builder.build();
-
-            Request request = new Request.Builder()
-                    .url(uploadUrl)
-                    .post(requestBody)
-                    .header("Origin", "android_app")
-                    .build();
-
-            httpClient.newCall(request).enqueue(new Callback() {
-                @Override
-                public void onFailure(Call call, IOException e) {
-                    runOnUiThread(() -> {
-                        Toast.makeText(MainActivity.this, "Upload failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                        updateStatus("Upload failed - check internet connection");
-                        resetUI();
-                    });
-                }
-
-                @Override
-                public void onResponse(Call call, Response response) throws IOException {
-                    String responseBody = response.body().string();
-                    Log.i(TAG, responseBody);
-                    runOnUiThread(() -> {
-                        if (response.code() != 200) {
-                            Toast.makeText(MainActivity.this, responseBody, Toast.LENGTH_LONG).show();
-                            updateStatus(responseBody);
-                            resetUI();
-                            return;
+                    @Override
+                    public void writeTo(@NonNull BufferedSink sink) throws IOException {
+                        try (InputStream is = getContentResolver().openInputStream(selectedImageUri)) {
+                            if (is == null) throw new IOException("Failed to open input stream");
+                            Source source = Okio.source(is);
+                            sink.writeAll(source);
                         }
+                    }
+                };
 
-                        // Start polling service
-                        Intent serviceIntent = new Intent(MainActivity.this, UpscalingPollingService.class);
-                        startForegroundService(serviceIntent);
+                apiService.uploadImage(imageBody, name, model, scale, fx, useWebP, new Callback() {
+                    @Override
+                    public void onFailure(@NonNull Call call, @NonNull IOException e) {
+                        runOnUiThread(() -> {
+                            updateStatus("Upload failed: " + e.getMessage());
+                            binding.btnUpload.setEnabled(true);
+                        });
+                    }
 
-                        Toast.makeText(MainActivity.this,
-                                "Job submitted! Processing in background...",
-                                Toast.LENGTH_LONG).show();
+                    @Override
+                    public void onResponse(@NonNull Call call, @NonNull Response response) throws IOException {
+                        String body = response.body() != null ? response.body().string() : "Empty Body";
+                        Log.i(TAG, "Upload Response: " + response.code() + " - " + body);
+                        runOnUiThread(() -> {
+                            if (response.code() != 200) {
+                                updateStatus("Error: " + body);
+                                binding.btnUpload.setEnabled(true);
+                            } else {
+                                updateStatus(getString(R.string.status_job_submitted));
+                                Toast.makeText(MainActivity.this, getString(R.string.status_job_submitted), Toast.LENGTH_LONG).show();
+                                
+                                // Start service explicitly after successful upload
+                                Intent serviceIntent = new Intent(MainActivity.this, UpscalingPollingService.class);
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                    startForegroundService(serviceIntent);
+                                } else {
+                                    startService(serviceIntent);
+                                }
 
-                        updateStatus("Job submitted! Your upscaled image will appear in your gallery within 1–5 minutes.");
-                        resetUI();
-                    });
-                }
-            });
-
-        } catch (Exception e) {
-            updateStatus("Upload error: " + e.getMessage());
-            resetUI();
-            Log.e(TAG, "Error in submitUpscalingRequest: " + e.getMessage());
-        }
+                                selectImage(null);
+                            }
+                        });
+                    }
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    updateStatus("Error: " + e.getMessage());
+                    resetUI();
+                });
+            }
+        });
     }
 
     private void resetUI() {
-        btnUpload.setEnabled(selectedImageUri != null);
-        selectImage(null);
+        updateUploadButtonState();
     }
 
-    private void updateStatus(String message) {
-        runOnUiThread(() -> tvStatus.setText(message));
-    }
-
-    // Permission handling methods
-    private void requestStoragePermissions() {
-        ArrayList<String> permissionsToRequest = new ArrayList<>();
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            permissionsToRequest.add(Manifest.permission.READ_MEDIA_IMAGES);
-        } else {
-            permissionsToRequest.add(Manifest.permission.READ_EXTERNAL_STORAGE);
-        }
-
-        if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.Q) {
-            permissionsToRequest.add(Manifest.permission.WRITE_EXTERNAL_STORAGE);
-        }
-
-        ActivityCompat.requestPermissions(this,
-                permissionsToRequest.toArray(new String[0]),
-                REQUEST_STORAGE_PERMISSION);
+    private void updateStatus(String status) {
+        binding.tvStatus.setText(status);
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-
-        if (requestCode == REQUEST_STORAGE_PERMISSION) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-            } else {
-                Toast.makeText(this, "Storage permission is required", Toast.LENGTH_LONG).show();
-                updateStatus("Permission denied: Storage permission is required");
-            }
-        }
+    protected void onDestroy() {
+        super.onDestroy();
+        executorService.shutdown();
     }
 }

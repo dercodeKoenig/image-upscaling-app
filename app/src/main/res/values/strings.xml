@@ -1,3 +1,17 @@
 <resources>
     <string name="app_name">image-upscaling.net</string>
+    <string name="use_webp_label">Use WebP if possible (smaller file size)</string>
+    <string name="no_image_text">No image selected. Once you\'ve selected an image, choose a scale/model and click Upload. The image will be automatically downloaded to the image gallery when complete.</string>
+    <string name="status_initial">Select an image to begin.</string>
+    <string name="status_analyzing">Analyzing image...</string>
+    <string name="status_image_selected">Image selected. Choose model and scale, then click Upload.</string>
+    <string name="status_uploading">Uploading image...</string>
+    <string name="status_job_submitted">Job submitted! The image will be automatically downloaded to your gallery when complete.</string>
+    <string name="status_error_large">Error: Image too large for available models</string>
+    <string name="status_error_analyze">Error: Could not analyze image</string>
+    <string name="btn_upload">Upload</string>
+    <string name="btn_select_image">Select Image</string>
+    <string name="btn_select_different_image">Select a different Image</string>
+    <string name="status_permission_required">Storage permission is required to save upscaled images. Please grant permission to continue.</string>
+    <string name="error_saving_gallery">Error: Could not save image to gallery. Please check storage permissions.</string>
 </resources>
