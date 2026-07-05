@@ -131,7 +131,8 @@ public class MainActivity extends AppCompatActivity {
             }
 
             @Override
-            public void onNothingSelected(android.widget.AdapterView<?> parent) {}
+            public void onNothingSelected(android.widget.AdapterView<?> parent) {
+            }
         });
 
         selectImage(null);
@@ -267,20 +268,19 @@ public class MainActivity extends AppCompatActivity {
     private void selectImage(Uri imageUri) {
         selectedImageUri = imageUri;
         if (selectedImageUri != null) {
-            try {
-                binding.imagePreview.setImageURI(selectedImageUri);
+            Bitmap previewBitmap = loadDownsampledBitmap(selectedImageUri, 1024, 1024);
+            if (previewBitmap != null) {
+                binding.imagePreview.setImageBitmap(previewBitmap);
                 binding.tvNoImage.setVisibility(View.GONE);
-            } catch (Exception | OutOfMemoryError e) {
-                Log.e(TAG, "Failed to load preview: " + e.getMessage());
-                binding.imagePreview.setImageDrawable(null);
-                binding.tvNoImage.setText("Preview unavailable (Image probably too large)");
+            } else {
+                binding.tvNoImage.setText("image preview error");
                 binding.tvNoImage.setVisibility(View.VISIBLE);
             }
             binding.imagePreview.setVisibility(View.VISIBLE);
             binding.btnSelectImage.setText(R.string.btn_select_different_image);
             binding.spinnerModel.setVisibility(View.VISIBLE);
             binding.spinnerScale.setVisibility(View.VISIBLE);
-            
+
             calculateImageSizeAndUpdateModels();
             updateUploadButtonState();
         } else {
@@ -296,6 +296,50 @@ public class MainActivity extends AppCompatActivity {
             binding.tvModelInfo.setText("");
             binding.checkBoxFaceEnhance.setVisibility(View.GONE);
         }
+    }
+
+    private Bitmap loadDownsampledBitmap(Uri uri, int reqWidth, int reqHeight) {
+        try (InputStream is = getContentResolver().openInputStream(uri)) {
+            // First decode with inJustDecodeBounds=true to check dimensions
+            final BitmapFactory.Options options = new BitmapFactory.Options();
+            options.inJustDecodeBounds = true;
+            BitmapFactory.decodeStream(is, null, options);
+
+            // Calculate inSampleSize
+            options.inSampleSize = calculateInSampleSize(options, reqWidth, reqHeight);
+
+            // Decode bitmap with inSampleSize set
+            options.inJustDecodeBounds = false;
+
+            // Re-open stream because it's been consumed
+            try (InputStream is2 = getContentResolver().openInputStream(uri)) {
+                return BitmapFactory.decodeStream(is2, null, options);
+            }
+        } catch (IOException e) {
+            Log.e(TAG, "Error loading downsampled bitmap", e);
+            return null;
+        }
+    }
+
+    private int calculateInSampleSize(BitmapFactory.Options options, int reqWidth, int reqHeight) {
+        // Raw height and width of image
+        final int height = options.outHeight;
+        final int width = options.outWidth;
+        int inSampleSize = 1;
+
+        if (height > reqHeight || width > reqWidth) {
+            final int halfHeight = height / 2;
+            final int halfWidth = width / 2;
+
+            // Calculate the largest inSampleSize value that is a power of 2 and keeps both
+            // height and width larger than the requested height and width.
+            while ((halfHeight / inSampleSize) >= reqHeight
+                    && (halfWidth / inSampleSize) >= reqWidth) {
+                inSampleSize *= 2;
+            }
+        }
+
+        return inSampleSize;
     }
 
     private void calculateImageSizeAndUpdateModels() {
@@ -502,7 +546,7 @@ public class MainActivity extends AppCompatActivity {
                             } else {
                                 updateStatus(getString(R.string.status_job_submitted));
                                 Toast.makeText(MainActivity.this, getString(R.string.status_job_submitted), Toast.LENGTH_LONG).show();
-                                
+
                                 // Start service explicitly after successful upload
                                 Intent serviceIntent = new Intent(MainActivity.this, UpscalingPollingService.class);
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
